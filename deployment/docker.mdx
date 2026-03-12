@@ -1,0 +1,241 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy Mango Damage Detection using Docker and Docker Compose'
+---
+
+Deploy the Mango Damage Detection application using Docker containers for both the Django frontend and FastAPI model server.
+
+## Architecture
+
+The Docker deployment consists of two services:
+
+- **Django Service** (`mango_app`): Runs on port 8000, handles the web interface
+- **FastAPI Service** (`mango_fastapi`): Runs on port 8001, serves the TensorFlow model
+
+Both services communicate over a shared Docker network called `mango_network`.
+
+## Prerequisites
+
+Make sure you have the following installed:
+
+- [Docker](https://www.docker.com/get-started)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+## Service Configuration
+
+### Docker Compose Setup
+
+The `docker-compose.yml` file defines two services:
+
+```yaml docker-compose.yml
+services:
+  fastapi:
+    image: mango_fastapi
+    build:
+      context: fastapi_app/
+      dockerfile: fastapi.Dockerfile
+    ports:
+      - "8001:8001"
+    command: uvicorn api:app --reload --host 0.0.0.0 --port 8001
+    networks:
+      - mango_network
+      
+  django:
+    image: mango_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    volumes:
+      - .:/app
+    networks:
+      - mango_network
+
+networks:
+  mango_network:
+    name: mango_network
+```
+
+### Network Configuration
+
+The services communicate over a custom bridge network:
+
+- **Network Name**: `mango_network`
+- **Purpose**: Allows Django to make HTTP requests to FastAPI using the service name `fastapi`
+- **Django Configuration**: The `FAST_API_DOCKER_HOST` environment variable in `mango_app/settings.py:121` is set to `http://fastapi:8001`
+
+```python settings.py
+FAST_API_DOCKER_HOST = "http://fastapi:8001"
+```
+
+This allows Django to connect to FastAPI using the Docker service name instead of localhost.
+
+### Port Mappings
+
+| Service | Container Port | Host Port | Description |
+|---------|---------------|-----------|-------------|
+| Django | 8000 | 8000 | Web interface |
+| FastAPI | 8001 | 8001 | Model API |
+
+### Volume Mounts
+
+The Django service mounts the project directory for development:
+
+```yaml
+volumes:
+  - .:/app
+```
+
+This enables hot-reloading during development.
+
+## Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/your-username/mango_app.git
+    cd mango_app
+    ```
+  </Step>
+
+  <Step title="Download the TensorFlow Model">
+    <Warning>
+      The pre-trained model file is required and is not included in the repository.
+    </Warning>
+
+    Download the model file from [bit.ly/pyconmodelh5](https://bit.ly/pyconmodelh5) and place it in the `fastapi_app/model/` directory:
+
+    ```bash
+    # Create the model directory if it doesn't exist
+    mkdir -p fastapi_app/model/
+    
+    # Place mango_model.h5 in this directory
+    # The file should be at: fastapi_app/model/mango_model.h5
+    ```
+  </Step>
+
+  <Step title="Build the Docker Images">
+    Build both the Django and FastAPI images:
+
+    ```bash
+    docker compose build
+    ```
+
+    This builds:
+    - `mango_app` image from `Dockerfile` (Python 3.12-slim base)
+    - `mango_fastapi` image from `fastapi_app/fastapi.Dockerfile` (Python 3.12-slim base)
+  </Step>
+
+  <Step title="Start the Containers">
+    Launch both services:
+
+    ```bash
+    docker compose up
+    ```
+
+    Add the `-d` flag to run in detached mode:
+
+    ```bash
+    docker compose up -d
+    ```
+  </Step>
+</Steps>
+
+## Accessing the Application
+
+Once the containers are running:
+
+- **Django Web Interface**: [http://localhost:8000/](http://localhost:8000/)
+- **FastAPI API Documentation**: [http://localhost:8001/docs](http://localhost:8001/docs)
+- **FastAPI Prediction Endpoint**: [http://localhost:8001/predict/](http://localhost:8001/predict/)
+
+## Docker Commands
+
+<CodeGroup>
+```bash Start Services
+docker compose up
+```
+
+```bash Start in Background
+docker compose up -d
+```
+
+```bash Stop Services
+docker compose down
+```
+
+```bash View Logs
+# All services
+docker compose logs
+
+# Specific service
+docker compose logs django
+docker compose logs fastapi
+```
+
+```bash Rebuild Images
+docker compose build --no-cache
+```
+
+```bash Restart Services
+docker compose restart
+```
+</CodeGroup>
+
+## Testing the API
+
+Test the FastAPI prediction endpoint using curl:
+
+```bash
+curl -X POST "http://localhost:8001/predict/" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@path_to_image_file"
+```
+
+<Tip>
+Replace `path_to_image_file` with the actual path to a mango image on your system.
+</Tip>
+
+## Troubleshooting
+
+### Services Can't Communicate
+
+If Django cannot reach FastAPI:
+
+1. Verify both services are on the same network:
+   ```bash
+   docker network inspect mango_network
+   ```
+
+2. Check the `FAST_API_DOCKER_HOST` setting in `mango_app/settings.py` is set to `http://fastapi:8001`
+
+### Port Already in Use
+
+If ports 8000 or 8001 are already in use, modify the port mappings in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "8080:8000"  # Maps host port 8080 to container port 8000
+```
+
+### Model File Missing
+
+If you see model loading errors:
+
+<Warning>
+Ensure `mango_model.h5` is placed in `fastapi_app/model/` before building the images.
+</Warning>
+
+## Environment Variables
+
+The Dockerfiles set the following environment variables:
+
+```dockerfile
+ENV PYTHONBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE 1
+```
+
+- `PYTHONBUFFERED=1`: Ensures Python output is sent straight to terminal without buffering
+- `PYTHONDONTWRITEBYTECODE=1`: Prevents Python from writing .pyc files

@@ -1,0 +1,201 @@
+---
+title: 'Web Interface Guide'
+description: 'Learn how to use the Django web interface to detect mango damage'
+---
+
+The Mango Damage Detection application provides a user-friendly web interface built with Django for uploading mango images and viewing detection results.
+
+## Accessing the Web Interface
+
+Once the application is running, access the web interface at:
+
+```
+http://localhost:8000/
+```
+
+<Note>
+Make sure both the Django and FastAPI containers are running before accessing the web interface. Use `docker compose up` to start both services.
+</Note>
+
+## Using the Image Upload Interface
+
+<Steps>
+  <Step title="Navigate to the Home Page">
+    Open your browser and go to `http://localhost:8000/`. You'll see the upload form with the title "Upload an Image of Mango to Detect Damage".
+  </Step>
+  
+  <Step title="Select a Mango Image">
+    Click the file input button and select an image file from your computer. The interface accepts standard image formats (JPEG, PNG, etc.).
+    
+    <Tip>
+    For best results, use clear, well-lit images of mangoes. The model expects images to be resized to 224x224 pixels internally.
+    </Tip>
+  </Step>
+  
+  <Step title="Submit for Detection">
+    Click the "Detect" button to submit your image for analysis. The Django backend will forward your image to the FastAPI service for prediction.
+  </Step>
+  
+  <Step title="View Results">
+    After processing, you'll be redirected to the results page showing:
+    - The filename of the uploaded image
+    - The predicted damage classification
+    - A link to upload another image
+  </Step>
+</Steps>
+
+## How the Upload Flow Works
+
+The web interface processes uploads through the following workflow:
+
+### 1. Form Submission
+
+The upload form in `main/templates/main/index.html` submits images via POST request:
+
+```html
+<form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="file" accept="image/*" required>
+    <button type="submit">Detect</button>
+</form>
+```
+
+### 2. Backend Processing
+
+The Django view in `main/views.py` handles the upload:
+
+```python
+def index(request):
+    if request.method == 'POST':
+        if 'file' in request.FILES:
+            file = request.FILES['file']
+            try:
+                file_data = file.read()
+                files = {'file': (file.name, file_data, file.content_type)}
+
+                # Make a request to FastAPI with the image
+                try:
+                    response = requests.post(f"{settings.FAST_API_DOCKER_HOST}/predict", files=files)
+                except Exception:
+                    response = requests.post(f"http://127.0.0.1:8001/predict/", files=files)
+            
+                if response.status_code == 200:
+                    prediction = response.json().get("prediction")
+                    return render(request, 'results.html', {'prediction': prediction, 'filename': file.name})
+                else:
+                    return render(request, 'index.html', {'error': f"Error from FastAPI: {response.status_code} - {response.text}"})
+            except Exception as err:
+                return render(request, 'index.html', {'error': f"An error occurred: {err}"})
+```
+
+### 3. API Communication
+
+The Django backend forwards the image to the FastAPI service:
+- First attempts to connect using `FAST_API_DOCKER_HOST` (for Docker deployments)
+- Falls back to `http://127.0.0.1:8001/predict/` (for local deployments)
+
+## Understanding the Results
+
+The results page displays the prediction from the TensorFlow model. The model can identify 5 different classifications:
+
+<CardGroup cols={2}>
+  <Card title="Anthracnose" icon="circle-exclamation">
+    A fungal disease causing dark, sunken spots on mangoes
+  </Card>
+  
+  <Card title="Bacterial-Black-spot" icon="bacteria">
+    Bacterial infection causing black spots on the fruit surface
+  </Card>
+  
+  <Card title="Fruitfly" icon="bug">
+    Damage caused by fruit fly infestation
+  </Card>
+  
+  <Card title="Healthy-mango" icon="circle-check">
+    No visible damage detected on the mango
+  </Card>
+  
+  <Card title="Others" icon="question">
+    Other types of damage not specifically classified
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+The web interface handles various error scenarios gracefully:
+
+### No File Uploaded
+
+If you submit the form without selecting a file:
+
+```python
+else:
+    return render(request, 'index.html', {'error': 'No file uploaded!'})
+```
+
+<Warning>
+Error message displayed: "No file uploaded!"
+</Warning>
+
+### FastAPI Service Errors
+
+If the FastAPI service returns an error (non-200 status code):
+
+```python
+else:
+    return render(request, 'index.html', {'error': f"Error from FastAPI: {response.status_code} - {response.text}"})
+```
+
+<Warning>
+Error message displayed: "Error from FastAPI: [status_code] - [error_details]"
+</Warning>
+
+### General Exceptions
+
+For any unexpected errors during processing:
+
+```python
+except Exception as err:
+    return render(request, 'index.html', {'error': f"An error occurred: {err}"})
+```
+
+<Warning>
+Error message displayed: "An error occurred: [error_details]"
+</Warning>
+
+## Troubleshooting
+
+### Cannot Access the Interface
+
+<Steps>
+  <Step title="Check Docker Containers">
+    Verify both containers are running:
+    ```bash
+    docker compose ps
+    ```
+  </Step>
+  
+  <Step title="Check Port Availability">
+    Ensure port 8000 is not being used by another application
+  </Step>
+  
+  <Step title="Review Container Logs">
+    Check for errors in the Django container logs:
+    ```bash
+    docker compose logs web
+    ```
+  </Step>
+</Steps>
+
+### Prediction Errors
+
+If you're getting prediction errors:
+
+- Verify the FastAPI service is running on port 8001
+- Check that the TensorFlow model file exists at `fastapi_app/model/mango_model.h5`
+- Ensure the uploaded image is a valid format
+- Review FastAPI logs: `docker compose logs fastapi`
+
+<Tip>
+The interface automatically tries both Docker host and localhost connections, so it works in both containerized and local development environments.
+</Tip>

@@ -1,0 +1,399 @@
+---
+title: 'API Usage Guide'
+description: 'Learn how to use the FastAPI prediction endpoint programmatically'
+---
+
+The Mango Damage Detection application provides a RESTful API built with FastAPI for programmatic access to the damage detection model.
+
+## API Endpoint Overview
+
+The prediction API is available at:
+
+```
+POST http://localhost:8001/predict/
+```
+
+<Note>
+The FastAPI service must be running on port 8001. When using Docker, this is automatically configured.
+</Note>
+
+## Request Format
+
+The API accepts image files via multipart/form-data with the following specifications:
+
+- **HTTP Method**: POST
+- **Content-Type**: `multipart/form-data`
+- **Field Name**: `file`
+- **File Types**: Standard image formats (JPEG, PNG, etc.)
+- **Processing**: Images are automatically resized to 224x224 pixels
+
+## Response Format
+
+### Successful Response
+
+When the prediction is successful (HTTP 200):
+
+```json
+{
+  "prediction": "class_name"
+}
+```
+
+The `prediction` field contains one of 5 possible values:
+
+- `"Anthracnose"` - Fungal disease detection
+- `"Bacterial-Black-spot"` - Bacterial infection detection
+- `"Fruitfly"` - Fruit fly damage detection
+- `"Healthy-mango"` - No damage detected
+- `"Others"` - Other types of damage
+
+### Error Response
+
+When an error occurs (HTTP 500):
+
+```json
+{
+  "detail": "error message"
+}
+```
+
+## API Implementation
+
+The prediction endpoint is implemented in `fastapi_app/api.py`:
+
+```python
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+import numpy as np
+from PIL import Image
+import io
+import tensorflow as tf
+
+app = FastAPI()
+
+# Load your TensorFlow model
+model = tf.keras.models.load_model('model/mango_model.h5')
+
+class_names = ["Anthracnose", "Bacterial-Black-spot", "Fruitly", "Healthy-mango", "Others"]
+
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
+    try:
+        # Read the image file
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        image = image.resize((224, 224))
+        image_array = np.array(image) / 255.0 
+        image_array = np.expand_dims(image_array, axis=0)  # Add batch dimension
+
+        # Predict using the model
+        predictions = model.predict(image_array)
+        
+        # Get the predicted class index with the highest score
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        
+        # Retrieve the corresponding class name from the model's class names
+        predicted_class_name = class_names[predicted_class_index]
+        
+        return JSONResponse(content={"prediction": predicted_class_name})
+    
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+```
+
+## Usage Examples
+
+### Using cURL
+
+The most straightforward way to test the API is with cURL:
+
+```bash
+curl -X POST "http://localhost:8001/predict/" \
+-H "accept: application/json" \
+-H "Content-Type: multipart/form-data" \
+-F "file=@path_to_image_file"
+```
+
+<Warning>
+Replace `path_to_image_file` with the actual path to your mango image, for example: `file=@/home/user/images/mango.jpg`
+</Warning>
+
+### Using Python Requests
+
+For Python applications, use the `requests` library:
+
+```python
+import requests
+
+# Open and send the image file
+with open('path_to_image_file', 'rb') as image_file:
+    files = {'file': image_file}
+    response = requests.post('http://localhost:8001/predict/', files=files)
+    
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Prediction: {result['prediction']}")
+    else:
+        error = response.json()
+        print(f"Error: {error['detail']}")
+```
+
+### Using Python Requests with File Data
+
+Alternatively, you can send file data directly:
+
+```python
+import requests
+
+# Read file into memory
+with open('mango_image.jpg', 'rb') as f:
+    file_data = f.read()
+
+files = {'file': ('mango.jpg', file_data, 'image/jpeg')}
+response = requests.post('http://localhost:8001/predict/', files=files)
+
+if response.status_code == 200:
+    prediction = response.json()['prediction']
+    print(f"The mango shows: {prediction}")
+else:
+    print(f"Error: {response.json()['detail']}")
+```
+
+### Using JavaScript Fetch
+
+For web applications using JavaScript:
+
+```javascript
+const formData = new FormData();
+const fileInput = document.querySelector('input[type="file"]');
+formData.append('file', fileInput.files[0]);
+
+fetch('http://localhost:8001/predict/', {
+    method: 'POST',
+    body: formData
+})
+.then(response => response.json())
+.then(data => {
+    console.log('Prediction:', data.prediction);
+})
+.catch(error => {
+    console.error('Error:', error);
+});
+```
+
+## Response Examples
+
+<CodeGroup>
+
+```json Anthracnose Detection
+{
+  "prediction": "Anthracnose"
+}
+```
+
+```json Bacterial Black Spot
+{
+  "prediction": "Bacterial-Black-spot"
+}
+```
+
+```json Fruit Fly Damage
+{
+  "prediction": "Fruitly"
+}
+```
+
+```json Healthy Mango
+{
+  "prediction": "Healthy-mango"
+}
+```
+
+```json Other Damage
+{
+  "prediction": "Others"
+}
+```
+
+</CodeGroup>
+
+## Error Handling
+
+The API returns HTTP 500 status code with error details when exceptions occur:
+
+<CodeGroup>
+
+```json Invalid Image Format
+{
+  "detail": "cannot identify image file <_io.BytesIO object at 0x...>"
+}
+```
+
+```json Model Loading Error
+{
+  "detail": "Unable to open file (file signature not found)"
+}
+```
+
+```json Processing Error
+{
+  "detail": "Error processing image: [specific error message]"
+}
+```
+
+</CodeGroup>
+
+<Tip>
+Always check the HTTP status code before parsing the response. A 200 status indicates success, while 500 indicates an error.
+</Tip>
+
+## Image Processing Pipeline
+
+Understanding how the API processes your images:
+
+<Steps>
+  <Step title="Image Upload">
+    The API receives the image file through the multipart/form-data upload.
+  </Step>
+  
+  <Step title="Image Loading">
+    The image is loaded using PIL (Python Imaging Library) from the uploaded bytes:
+    ```python
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents))
+    ```
+  </Step>
+  
+  <Step title="Image Preprocessing">
+    The image is resized to 224x224 pixels and normalized:
+    ```python
+    image = image.resize((224, 224))
+    image_array = np.array(image) / 255.0
+    image_array = np.expand_dims(image_array, axis=0)
+    ```
+  </Step>
+  
+  <Step title="Model Prediction">
+    The preprocessed image is fed to the TensorFlow model:
+    ```python
+    predictions = model.predict(image_array)
+    predicted_class_index = np.argmax(predictions, axis=1)[0]
+    ```
+  </Step>
+  
+  <Step title="Result Mapping">
+    The predicted class index is mapped to the corresponding class name:
+    ```python
+    predicted_class_name = class_names[predicted_class_index]
+    ```
+  </Step>
+</Steps>
+
+## Model Information
+
+The API uses a TensorFlow model trained to classify mango damage:
+
+- **Model File**: `model/mango_model.h5`
+- **Input Size**: 224x224 pixels (RGB)
+- **Architecture**: VGG19-based (see [Colab Notebook](https://bit.ly/vgg19-model))
+- **Classes**: 5 damage categories
+- **Normalization**: Pixel values scaled to [0, 1]
+
+<Note>
+You need to download the pre-trained model separately from [this link](https://bit.ly/pyconmodelh5) and place it in the `fastapi_app/model/` directory.
+</Note>
+
+## Testing the API
+
+### Using FastAPI Interactive Docs
+
+FastAPI provides automatic interactive API documentation:
+
+```
+http://localhost:8001/docs
+```
+
+This Swagger UI interface allows you to:
+- View all available endpoints
+- Test the API directly from your browser
+- See request/response schemas
+- Try different image uploads
+
+### Using ReDoc
+
+Alternatively, access the ReDoc interface:
+
+```
+http://localhost:8001/redoc
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Image Quality" icon="image">
+    Use clear, well-lit images for best prediction accuracy. Avoid blurry or low-resolution images.
+  </Card>
+  
+  <Card title="File Size" icon="file">
+    While there's no strict size limit, keep images under 10MB for optimal performance.
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Always implement proper error handling to catch network issues and API errors.
+  </Card>
+  
+  <Card title="Timeouts" icon="clock">
+    Set appropriate timeout values in your HTTP client, as model inference may take a few seconds.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Connection Refused
+
+If you get a connection refused error:
+
+```bash
+# Check if FastAPI is running
+curl http://localhost:8001/docs
+
+# View FastAPI logs
+docker compose logs fastapi
+```
+
+### Model Not Found
+
+If you get model loading errors:
+
+```
+detail: "Unable to open file (file signature not found)"
+```
+
+Verify the model file exists:
+
+```bash
+ls -lh fastapi_app/model/mango_model.h5
+```
+
+<Warning>
+Make sure you've downloaded the model file from [bit.ly/pyconmodelh5](https://bit.ly/pyconmodelh5) and placed it in the correct directory.
+</Warning>
+
+### Invalid Predictions
+
+If predictions seem incorrect:
+
+- Verify the image is of a mango
+- Check image quality and lighting
+- Ensure the model file is the correct version
+- Test with sample images from the training dataset
+
+## Rate Limiting and Performance
+
+<Note>
+The current API implementation does not include rate limiting. For production deployments, consider implementing:
+- Request rate limiting
+- Request queuing for high traffic
+- Caching for repeated predictions
+- Load balancing across multiple API instances
+</Note>

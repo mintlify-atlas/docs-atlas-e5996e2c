@@ -1,0 +1,281 @@
+---
+title: 'Django Integration'
+description: 'Learn how Django integrates with FastAPI for mango damage detection'
+icon: 'link'
+---
+
+## Overview
+
+The Mango Damage Detection project uses a Django web application as the frontend, which communicates with a FastAPI backend for ML inference. This architecture separates the user interface from the compute-intensive prediction tasks.
+
+## Architecture
+
+The system follows a microservices pattern:
+- **Django**: Handles web UI, file uploads, and user interactions
+- **FastAPI**: Processes images and runs TensorFlow model predictions
+- **Communication**: HTTP requests using the `requests` library
+
+## Configuration
+
+### FastAPI Host Setting
+
+In `mango_app/settings.py`, configure the FastAPI service endpoint:
+
+```python mango_app/settings.py
+FAST_API_DOCKER_HOST = "http://fastapi:8001"
+```
+
+<Note>
+  The default configuration uses `http://fastapi:8001` which assumes Docker networking with a service named `fastapi`. For local development, the fallback uses `http://127.0.0.1:8001`.
+</Note>
+
+## Django View Implementation
+
+The main integration happens in the `index()` view function in `main/views.py`:
+
+```python main/views.py
+from django.shortcuts import render
+from django.conf import settings
+import requests
+
+def index(request):
+    if request.method == 'POST':
+        if 'file' in request.FILES:
+            file = request.FILES['file']
+            try:
+                
+                file_data = file.read()
+                files = {'file': (file.name, file_data, file.content_type)}
+
+                # Make a request to FastAPI with the image
+                try:
+                    response = requests.post(f"{settings.FAST_API_DOCKER_HOST}/predict", files=files)
+
+                except Exception:
+                    response = requests.post(f"http://127.0.0.1:8001/predict/'", files=files)
+            
+                if response.status_code == 200:
+                    prediction = response.json().get("prediction")
+                    return render(request, 'results.html', {'prediction': prediction, 'filename': file.name})
+                else:
+                    return render(request, 'index.html', {'error': f"Error from FastAPI: {response.status_code} - {response.text}"})
+            except Exception as err:
+                return render(request, 'index.html', {'error': f"An error occurred: {err}"})
+        else:
+            return render(request, 'index.html', {'error': 'No file uploaded!'})
+    
+    return render(request, 'index.html')
+```
+
+## Integration Flow
+
+<Steps>
+  <Step title="User uploads image">
+    The user selects an image file through the Django web interface (`index.html`) and submits the form.
+  </Step>
+  
+  <Step title="Django receives file">
+    Django processes the POST request and extracts the uploaded file from `request.FILES['file']`.
+  </Step>
+  
+  <Step title="File preparation">
+    The file is read into memory and formatted as a multipart/form-data payload:
+    ```python
+    file_data = file.read()
+    files = {'file': (file.name, file_data, file.content_type)}
+    ```
+  </Step>
+  
+  <Step title="FastAPI request with fallback">
+    Django attempts to forward the file to FastAPI using the Docker host:
+    - **Primary**: `http://fastapi:8001/predict` (Docker networking)
+    - **Fallback**: `http://127.0.0.1:8001/predict/` (localhost for development)
+  </Step>
+  
+  <Step title="Response handling">
+    Django processes the FastAPI response:
+    - **Success (200)**: Extract prediction and render `results.html`
+    - **Error**: Display error message in `index.html`
+  </Step>
+</Steps>
+
+## Fallback Mechanism
+
+The integration includes a robust fallback strategy for different environments:
+
+```python
+try:
+    # Try Docker host first (production/Docker Compose)
+    response = requests.post(f"{settings.FAST_API_DOCKER_HOST}/predict", files=files)
+except Exception:
+    # Fall back to localhost (local development)
+    response = requests.post(f"http://127.0.0.1:8001/predict/'", files=files)
+```
+
+<Warning>
+  This fallback is useful for development but should be refined for production. Consider using environment variables to explicitly set the FastAPI host rather than relying on exception handling.
+</Warning>
+
+## Error Handling
+
+The integration implements multiple layers of error handling:
+
+### 1. Missing File Upload
+
+```python
+if 'file' in request.FILES:
+    # Process file
+else:
+    return render(request, 'index.html', {'error': 'No file uploaded!'})
+```
+
+### 2. FastAPI HTTP Errors
+
+```python
+if response.status_code == 200:
+    prediction = response.json().get("prediction")
+    return render(request, 'results.html', {'prediction': prediction, 'filename': file.name})
+else:
+    return render(request, 'index.html', {'error': f"Error from FastAPI: {response.status_code} - {response.text}"})
+```
+
+### 3. General Exceptions
+
+```python
+try:
+    # File processing and API call
+except Exception as err:
+    return render(request, 'index.html', {'error': f"An error occurred: {err}"})
+```
+
+## Response Rendering
+
+### Success Response
+
+When prediction succeeds, Django renders `results.html` with:
+- `prediction`: The detected damage type (e.g., "Anthracnose", "Healthy-mango")
+- `filename`: Original uploaded filename
+
+```html results.html
+<h1>Result for {{ filename }}</h1>
+<p>Prediction: {{ prediction }}</p>
+<a href="/">Upload Another Image</a>
+```
+
+### Error Response
+
+Errors are displayed in `index.html`:
+
+```html index.html
+{% if error %}
+    <p style="color: red;">{{ error }}</p>
+{% endif %}
+```
+
+## File Upload Form
+
+The Django template includes a simple upload form:
+
+```html index.html
+<form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="file" accept="image/*" required>
+    <button type="submit">Detect</button>
+</form>
+```
+
+<Tip>
+  The `enctype="multipart/form-data"` attribute is essential for file uploads. The `{% csrf_token %}` provides CSRF protection for POST requests.
+</Tip>
+
+## Production Considerations
+
+### Environment-Based Configuration
+
+Replace the try-except fallback with environment variables:
+
+```python settings.py
+import os
+
+FAST_API_HOST = os.getenv('FAST_API_HOST', 'http://fastapi:8001')
+```
+
+```python views.py
+response = requests.post(f"{settings.FAST_API_HOST}/predict", files=files)
+```
+
+### Timeout Configuration
+
+Add timeouts to prevent hanging requests:
+
+```python
+response = requests.post(
+    f"{settings.FAST_API_HOST}/predict",
+    files=files,
+    timeout=30  # 30 second timeout
+)
+```
+
+### Request Retry Logic
+
+Consider implementing retry logic for transient failures:
+
+```python
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
+session = requests.Session()
+retry = Retry(total=3, backoff_factor=0.5)
+adapter = HTTPAdapter(max_retries=retry)
+session.mount('http://', adapter)
+
+response = session.post(f"{settings.FAST_API_HOST}/predict", files=files)
+```
+
+## Testing the Integration
+
+### Local Development
+
+1. Start FastAPI service:
+   ```bash
+   cd fastapi_app
+   uvicorn api:app --host 0.0.0.0 --port 8001
+   ```
+
+2. Start Django development server:
+   ```bash
+   python manage.py runserver
+   ```
+
+3. Access the web interface at `http://localhost:8000`
+
+### Docker Compose
+
+```yaml docker-compose.yml
+services:
+  django:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - FAST_API_HOST=http://fastapi:8001
+    depends_on:
+      - fastapi
+      
+  fastapi:
+    build: ./fastapi_app
+    ports:
+      - "8001:8001"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api/predict">
+    Explore the FastAPI endpoint details
+  </Card>
+  
+  <Card title="Examples" icon="laptop-code" href="/api/examples">
+    View practical usage examples
+  </Card>
+</CardGroup>

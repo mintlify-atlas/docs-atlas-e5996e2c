@@ -1,0 +1,335 @@
+---
+title: 'Mango Damage Types'
+description: 'Understanding the five classes of mango damage detected by the model'
+---
+
+## Overview
+
+The Mango Damage Detection model classifies mango images into **5 distinct categories** based on visual characteristics. The model is trained to identify common diseases and conditions affecting mango fruit quality.
+
+```python
+# From fastapi_app/api.py
+class_names = [
+    "Anthracnose", 
+    "Bacterial-Black-spot", 
+    "Fruitly", 
+    "Healthy-mango", 
+    "Others"
+]
+```
+
+## Classification Categories
+
+The model outputs one of five class labels for each prediction:
+
+<CardGroup cols={2}>
+  <Card title="Anthracnose" icon="virus" color="#dc2626">
+    Fungal disease causing dark, sunken lesions on mango skin and flesh
+  </Card>
+  <Card title="Bacterial Black Spot" icon="bacteria" color="#ea580c">
+    Bacterial infection resulting in black spots with yellow halos
+  </Card>
+  <Card title="Fruitfly Damage" icon="bug" color="#d97706">
+    Physical damage from fruit fly infestation and larvae feeding
+  </Card>
+  <Card title="Healthy Mango" icon="check-circle" color="#16a34a">
+    No visible damage or disease, suitable for consumption or sale
+  </Card>
+  <Card title="Others" icon="question-circle" color="#6b7280">
+    Unclassified damage types or ambiguous conditions
+  </Card>
+</CardGroup>
+
+## Detailed Damage Descriptions
+
+### 1. Anthracnose
+
+<Accordion title="About Anthracnose">
+**Causal Agent:** *Colletotrichum gloeosporioides* fungus
+
+**Characteristics:**
+- Dark brown to black circular or irregular lesions
+- Sunken spots that may expand as the fruit ripens
+- Pink spore masses may appear in humid conditions
+- Can affect both pre-harvest and post-harvest mangoes
+
+**Impact:**
+- Major post-harvest disease causing significant economic losses
+- Reduces shelf life and market value
+- Can spread rapidly in storage facilities
+
+**Visual Indicators:**
+- Small dark spots that enlarge and coalesce
+- Lesions become sunken as fruit tissue collapses
+- May have a slightly raised border
+</Accordion>
+
+### 2. Bacterial Black Spot
+
+<Accordion title="About Bacterial Black Spot">
+**Causal Agent:** *Xanthomonas* bacteria species
+
+**Characteristics:**
+- Small black spots with water-soaked margins
+- Yellow halo may surround the lesions
+- Spots are usually raised initially, then become flat or sunken
+- More prevalent during rainy seasons
+
+**Impact:**
+- Affects both fruit appearance and quality
+- Can lead to secondary infections
+- Reduces marketability and consumer acceptance
+
+**Visual Indicators:**
+- Multiple small black spots across the fruit surface
+- Characteristic yellow halo around spots
+- Spots may crack and provide entry for other pathogens
+</Accordion>
+
+### 3. Fruitfly Damage (Fruitly)
+
+<Accordion title="About Fruitfly Damage">
+**Causal Agent:** Fruit fly species (*Bactrocera* and *Ceratitis*)
+
+**Characteristics:**
+- Small puncture marks from oviposition (egg-laying)
+- Soft, discolored areas where larvae feed internally
+- Premature fruit drop may occur
+- Internal tunneling by larvae
+
+**Impact:**
+- Makes fruit unmarketable and inedible
+- Quarantine restrictions in many countries
+- Significant economic pest in mango production
+
+**Visual Indicators:**
+- Tiny pin-prick holes on fruit surface
+- Discolored, soft patches
+- May show signs of decay around entry points
+- In advanced stages, larvae exit holes may be visible
+</Accordion>
+
+### 4. Healthy Mango
+
+<Accordion title="About Healthy Mangoes">
+**Characteristics:**
+- Smooth, unblemished skin
+- Uniform coloration appropriate to variety and ripeness stage
+- No visible lesions, spots, or physical damage
+- Firm texture without soft spots
+
+**Quality Indicators:**
+- Clear, glossy surface
+- Natural variation in color based on variety (green, yellow, red)
+- No signs of disease or pest damage
+- Suitable for fresh market or processing
+
+**Market Value:**
+- Premium pricing for undamaged fruit
+- Longer shelf life and storage potential
+- High consumer acceptance
+</Accordion>
+
+### 5. Others
+
+<Accordion title="About Other Damage Types">
+**Category Purpose:**
+This catch-all category includes damage that doesn't fit the four main classes:
+
+**Possible Conditions:**
+- Mechanical damage (bruising, cuts, abrasions)
+- Sunburn or heat damage
+- Nutritional deficiencies
+- Other diseases not in the main categories
+- Ambiguous or multiple damage types
+- Poor image quality preventing clear classification
+
+**Interpretation:**
+- Requires further visual inspection
+- May indicate rare or emerging disease types
+- Could be a combination of multiple damage factors
+</Accordion>
+
+## Understanding Predictions
+
+### How the Model Makes Predictions
+
+The model uses a softmax output layer to generate probability scores for each class:
+
+```python
+# From fastapi_app/api.py
+# Predict using the model
+predictions = model.predict(image_array)
+# Output shape: (1, 5) - batch of 1, 5 class probabilities
+
+# Get the predicted class index with highest score
+predicted_class_index = np.argmax(predictions, axis=1)[0]
+
+# Map to class name
+predicted_class_name = class_names[predicted_class_index]
+```
+
+### Example Prediction Flow
+
+<Steps>
+  <Step title="Image Input">
+    User uploads a mango image (any size, RGB format)
+  </Step>
+  
+  <Step title="Preprocessing">
+    Image is resized to 224×224 and normalized to [0, 1]
+  </Step>
+  
+  <Step title="Model Inference">
+    VGG19 model outputs probability distribution:
+    ```python
+    # Example output
+    predictions = [
+        [0.05, 0.82, 0.03, 0.08, 0.02]  # Probabilities for each class
+    ]
+    ```
+  </Step>
+  
+  <Step title="Class Selection">
+    Highest probability determines the predicted class:
+    ```python
+    # Index 1 (Bacterial-Black-spot) has highest probability (0.82)
+    predicted_class = "Bacterial-Black-spot"
+    ```
+  </Step>
+  
+  <Step title="Result">
+    JSON response returned to Django:
+    ```json
+    {"prediction": "Bacterial-Black-spot"}
+    ```
+  </Step>
+</Steps>
+
+## API Response Format
+
+When you make a prediction request, the API returns a simple JSON object:
+
+<CodeGroup>
+```json Successful Prediction
+{
+  "prediction": "Anthracnose"
+}
+```
+
+```json Healthy Mango
+{
+  "prediction": "Healthy-mango"
+}
+```
+
+```json Error Response
+{
+  "detail": "Error message describing what went wrong"
+}
+```
+</CodeGroup>
+
+### Making Direct API Calls
+
+You can test the FastAPI endpoint directly using curl:
+
+```bash
+curl -X POST "http://localhost:8001/predict/" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/mango_image.jpg"
+```
+
+Or using Python's `requests` library:
+
+```python
+import requests
+
+with open('mango_image.jpg', 'rb') as f:
+    files = {'file': f}
+    response = requests.post(
+        'http://localhost:8001/predict/',
+        files=files
+    )
+    
+if response.status_code == 200:
+    result = response.json()
+    print(f"Predicted damage: {result['prediction']}")
+```
+
+## Interpreting Results
+
+<Note>
+**Important:** The model returns only the class label with the highest probability. It does not provide confidence scores or probability distributions in the current implementation.
+</Note>
+
+### Decision Guidelines
+
+Based on the prediction result, here are recommended actions:
+
+| Prediction | Recommendation |
+|------------|----------------|
+| **Healthy-mango** | Suitable for market sale, storage, or processing |
+| **Anthracnose** | Isolate from healthy fruit; use immediately or discard if severe |
+| **Bacterial-Black-spot** | Remove from healthy stock; may be suitable for processing if minimal |
+| **Fruitly** | Discard immediately; do not store with other fruit |
+| **Others** | Requires manual inspection to determine appropriate action |
+
+### Confidence Considerations
+
+<Warning>
+While the model is trained on mango damage data, consider these factors:
+
+- **Lighting conditions:** Poor lighting can affect classification accuracy
+- **Image quality:** Blurry or low-resolution images may reduce performance
+- **Multiple damage types:** Fruit with multiple issues may be classified as "Others"
+- **Variety differences:** Some mango varieties may have natural coloring that resembles damage
+- **Stage of damage:** Early-stage infections may be harder to detect
+
+For critical decisions (e.g., export quality control), combine model predictions with manual inspection.
+</Warning>
+
+## Model Limitations
+
+<Accordion title="Known Limitations">
+1. **Single-label classification:** The model assigns only one class, even if multiple damage types are present
+
+2. **No confidence scores:** The API doesn't currently expose probability scores (only the top prediction)
+
+3. **Training data bias:** Model performance depends on the diversity and quality of training images
+
+4. **New disease types:** Emerging diseases not in the training set will likely be classified as "Others"
+
+5. **Image requirements:** Best results require:
+   - Clear focus on the mango
+   - Adequate lighting
+   - Visible damage areas
+   - Minimal background clutter
+</Accordion>
+
+## Improving Classification Accuracy
+
+<Tip>
+**Best Practices for Image Capture:**
+
+- Use natural daylight or consistent artificial lighting
+- Capture images at multiple angles if damage is localized
+- Ensure the mango fills most of the frame
+- Use a minimum resolution of 224×224 pixels (higher is better)
+- Avoid shadows that obscure damage areas
+- Photograph damaged areas close-up for better feature visibility
+</Tip>
+
+## Research and Training
+
+The model was trained using a VGG19 architecture on a curated dataset of mango images. For more details on the training process:
+
+<CardGroup cols={2}>
+  <Card title="Training Notebook" icon="python" href="https://bit.ly/vgg19-model">
+    View the Google Colab notebook with training details and data preparation
+  </Card>
+  <Card title="Model Download" icon="download" href="https://bit.ly/pyconmodelh5">
+    Download the pre-trained model weights (mango_model.h5)
+  </Card>
+</CardGroup>

@@ -1,0 +1,112 @@
+---
+title: Introduction
+description: AI-powered mango damage detection using TensorFlow and deep learning
+---
+
+<div style={{
+  background: 'linear-gradient(135deg, #ee6423 0%, #eeb47c 100%)',
+  borderRadius: '8px',
+  padding: '48px 32px',
+  marginBottom: '32px',
+  color: 'white'
+}}>
+  <h1 style={{
+    fontSize: '40px',
+    fontWeight: '700',
+    marginBottom: '16px',
+    color: 'white'
+  }}>
+    Mango Damage Detection
+  </h1>
+  <p style={{
+    fontSize: '20px',
+    marginBottom: '0',
+    opacity: '0.95'
+  }}>
+    Detect and classify mango diseases with state-of-the-art machine learning
+  </p>
+</div>
+
+## What is Mango Damage Detection?
+
+Mango Damage Detection is a web application that uses a pre-trained TensorFlow model to identify and classify damage on mangoes. The system detects five different types of conditions including diseases, pests, and healthy fruit.
+
+Built with Django for the web interface and FastAPI for model serving, this application provides both a user-friendly web interface and a REST API for automated damage detection.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multilabel Classification" icon="brain" iconType="duotone">
+    Detects five types of mango conditions: Anthracnose, Bacterial Black Spot, Fruitfly damage, Healthy mangoes, and other issues
+  </Card>
+  <Card title="FastAPI Model Serving" icon="bolt" iconType="duotone">
+    High-performance API endpoint for real-time image inference using TensorFlow
+  </Card>
+  <Card title="Django Web Interface" icon="window" iconType="duotone">
+    User-friendly web application for uploading images and viewing predictions
+  </Card>
+  <Card title="VGG19 Architecture" icon="network-wired" iconType="duotone">
+    Pre-trained deep learning model based on VGG19 for accurate classification
+  </Card>
+  <Card title="Docker Deployment" icon="docker" iconType="duotone">
+    Fully containerized with docker-compose for easy deployment
+  </Card>
+  <Card title="REST API" icon="code" iconType="duotone">
+    Simple JSON API for integrating into existing workflows and applications
+  </Card>
+</CardGroup>
+
+## How It Works
+
+The application uses a two-tier architecture:
+
+1. **Django Frontend**: Provides a web interface where users can upload mango images
+2. **FastAPI Backend**: Serves the TensorFlow model and performs image classification
+
+When you upload an image, the Django application forwards it to the FastAPI service, which preprocesses the image (resize to 224x224, normalize pixel values) and runs inference using the trained model. The prediction is returned to the user with the detected damage type.
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Agricultural Quality Control">
+    Automatically inspect mangoes in packing facilities to identify damaged fruit before shipping
+  </Accordion>
+  <Accordion title="Disease Monitoring">
+    Track the spread of diseases like Anthracnose and Bacterial Black Spot across orchards
+  </Accordion>
+  <Accordion title="Research and Analysis">
+    Collect data on mango health patterns for agricultural research
+  </Accordion>
+  <Accordion title="Supply Chain Optimization">
+    Reduce waste by identifying and separating damaged fruit early in the supply chain
+  </Accordion>
+</AccordionGroup>
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running in minutes with Docker
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/predict">
+    Learn how to use the prediction API
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand how the system works
+  </Card>
+  <Card title="Model Details" icon="brain" href="/concepts/model">
+    Learn about the VGG19-based classification model
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+- **TensorFlow 2.14+**: Deep learning framework for model inference
+- **FastAPI**: Modern Python web framework for the API server
+- **Django 3.2+**: Web framework for the user interface
+- **Docker**: Containerization for easy deployment
+- **Python 3.8+**: Core programming language
+
+## License
+
+This project is licensed under the MIT License, making it free to use, modify, and distribute.

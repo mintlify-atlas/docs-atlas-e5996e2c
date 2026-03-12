@@ -1,0 +1,126 @@
+---
+title: 'POST /predict/'
+description: 'Upload a mango image and receive damage classification predictions'
+---
+
+## Endpoint
+
+```
+POST http://localhost:8001/predict/
+```
+
+This endpoint accepts an image file of a mango and returns a classification prediction identifying the type of damage or health status.
+
+## Request Parameters
+
+<ParamField body="file" type="UploadFile" required>
+  The mango image file to analyze. Must be sent as multipart/form-data.
+  
+  Supported formats: JPG, PNG, and other common image formats supported by PIL.
+</ParamField>
+
+## Image Processing
+
+When you submit an image, the API automatically performs the following preprocessing steps:
+
+1. **Resize**: The image is resized to 224x224 pixels to match the model's input requirements
+2. **Normalize**: Pixel values are normalized to the 0-1 range by dividing by 255.0
+3. **Batch dimension**: An additional dimension is added to create a batch of size 1
+
+```python
+image = image.resize((224, 224))
+image_array = np.array(image) / 255.0 
+image_array = np.expand_dims(image_array, axis=0)  # Add batch dimension
+```
+
+## Request Examples
+
+### cURL
+
+```bash
+curl -X POST "http://localhost:8001/predict/" \
+-H "accept: application/json" \
+-H "Content-Type: multipart/form-data" \
+-F "file=@path_to_image_file"
+```
+
+### Python (requests)
+
+```python
+import requests
+
+url = "http://localhost:8001/predict/"
+image_path = "path/to/mango_image.jpg"
+
+with open(image_path, "rb") as image_file:
+    files = {"file": image_file}
+    response = requests.post(url, files=files)
+    
+if response.status_code == 200:
+    result = response.json()
+    print(f"Prediction: {result['prediction']}")
+else:
+    print(f"Error: {response.json()['detail']}")
+```
+
+### JavaScript (fetch)
+
+```javascript
+const formData = new FormData();
+const fileInput = document.querySelector('input[type="file"]');
+formData.append('file', fileInput.files[0]);
+
+fetch('http://localhost:8001/predict/', {
+  method: 'POST',
+  body: formData
+})
+.then(response => response.json())
+.then(data => {
+  console.log('Prediction:', data.prediction);
+})
+.catch(error => {
+  console.error('Error:', error);
+});
+```
+
+## Response
+
+### Successful Response
+
+**Status Code**: `200 OK`
+
+```json
+{
+  "prediction": "Anthracnose"
+}
+```
+
+The `prediction` field contains one of the five possible mango condition classifications. See [Response Format](/api/response-format) for details on all possible values.
+
+### Error Response
+
+**Status Code**: `500 Internal Server Error`
+
+```json
+{
+  "detail": "Error message describing what went wrong"
+}
+```
+
+Common error scenarios:
+- Invalid image format
+- Corrupted image file
+- Missing file parameter
+- Model inference errors
+
+## Model Details
+
+The prediction endpoint uses a TensorFlow model (`mango_model.h5`) trained to classify mango images into one of five categories:
+
+- **Anthracnose**: Fungal disease causing dark lesions
+- **Bacterial-Black-spot**: Bacterial infection with black spots
+- **Fruitly**: Fruit fly damage
+- **Healthy-mango**: No visible damage
+- **Others**: Other types of damage not classified above
+
+The model outputs a probability distribution across all classes, and the class with the highest probability is returned as the prediction.

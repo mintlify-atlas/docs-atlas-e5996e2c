@@ -1,0 +1,565 @@
+---
+title: 'Model Architecture'
+description: 'Technical details of the VGG19-based mango damage detection model'
+---
+
+## Overview
+
+The Mango Damage Detection system uses a **VGG19-based deep learning model** trained on TensorFlow/Keras to classify mango images into five damage categories. The model is served via FastAPI for high-performance inference.
+
+<CardGroup cols={3}>
+  <Card title="Architecture" icon="sitemap">
+    VGG19 Transfer Learning
+  </Card>
+  <Card title="Input Size" icon="image">
+    224 × 224 × 3 (RGB)
+  </Card>
+  <Card title="Classes" icon="list">
+    5 damage categories
+  </Card>
+</CardGroup>
+
+## Model Architecture
+
+### VGG19 Foundation
+
+The model is based on the **VGG19 (Visual Geometry Group)** architecture, a convolutional neural network known for its simplicity and effectiveness in image classification tasks.
+
+<Accordion title="Why VGG19?">
+**Key Advantages:**
+
+- **Proven performance:** VGG19 has demonstrated strong results on image classification tasks
+- **Transfer learning:** Pre-trained weights from ImageNet provide a strong starting point
+- **Feature extraction:** Deep convolutional layers capture hierarchical visual features
+- **Simplicity:** Straightforward architecture with consistent 3×3 convolution filters
+
+**Architecture Characteristics:**
+- 19 weight layers (16 convolutional + 3 fully connected)
+- Small 3×3 receptive fields throughout
+- Max pooling for spatial downsampling
+- ReLU activation functions
+- Softmax output for multi-class classification
+</Accordion>
+
+### Network Structure
+
+```
+Input (224×224×3)
+    ↓
+VGG19 Base Layers (Pre-trained on ImageNet)
+  - Conv Block 1: 64 filters
+  - Conv Block 2: 128 filters
+  - Conv Block 3: 256 filters
+  - Conv Block 4: 512 filters
+  - Conv Block 5: 512 filters
+    ↓
+Custom Classification Head
+  - Global Average Pooling / Flatten
+  - Dense Layer(s)
+  - Dropout (regularization)
+    ↓
+Output Layer (5 classes, Softmax)
+  - [Anthracnose, Bacterial-Black-spot, Fruitly, Healthy-mango, Others]
+```
+
+<Note>
+The exact custom layers added on top of VGG19 depend on the training configuration. See the [training notebook](https://bit.ly/vgg19-model) for full architecture details.
+</Note>
+
+## Model Loading
+
+The model is loaded once when the FastAPI application starts:
+
+```python
+# From fastapi_app/api.py
+import tensorflow as tf
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Load the trained model from disk
+model = tf.keras.models.load_model('model/mango_model.h5')
+
+# Define class labels (must match training order)
+class_names = [
+    "Anthracnose", 
+    "Bacterial-Black-spot", 
+    "Fruitly", 
+    "Healthy-mango", 
+    "Others"
+]
+```
+
+<Tip>
+Loading the model at startup (not per-request) significantly improves inference speed by avoiding repeated loading overhead.
+</Tip>
+
+## Input Preprocessing
+
+Images must be preprocessed to match the model's expected input format:
+
+### Preprocessing Pipeline
+
+<Steps>
+  <Step title="Image Loading">
+    Load the uploaded image file using PIL:
+    ```python
+    from PIL import Image
+    import io
+    
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents))
+    ```
+  </Step>
+  
+  <Step title="Resizing">
+    Resize to the model's input dimensions (224×224):
+    ```python
+    image = image.resize((224, 224))
+    ```
+    
+    This ensures all images have consistent dimensions regardless of original size.
+  </Step>
+  
+  <Step title="Array Conversion">
+    Convert PIL image to NumPy array:
+    ```python
+    import numpy as np
+    
+    image_array = np.array(image)
+    # Shape: (224, 224, 3)
+    ```
+  </Step>
+  
+  <Step title="Normalization">
+    Normalize pixel values from [0, 255] to [0, 1]:
+    ```python
+    image_array = image_array / 255.0
+    ```
+    
+    This matches the preprocessing used during training.
+  </Step>
+  
+  <Step title="Batch Dimension">
+    Add a batch dimension for model input:
+    ```python
+    image_array = np.expand_dims(image_array, axis=0)
+    # Shape: (1, 224, 224, 3)
+    ```
+    
+    The leading dimension represents the batch size (1 image).
+  </Step>
+</Steps>
+
+### Complete Preprocessing Code
+
+```python
+# From fastapi_app/api.py
+from fastapi import File, UploadFile
+from PIL import Image
+import numpy as np
+import io
+
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
+    # Read the image file
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents))
+    
+    # Preprocess: resize to 224x224
+    image = image.resize((224, 224))
+    
+    # Convert to array and normalize to [0, 1]
+    image_array = np.array(image) / 255.0
+    
+    # Add batch dimension: (224, 224, 3) -> (1, 224, 224, 3)
+    image_array = np.expand_dims(image_array, axis=0)
+    
+    # Ready for inference
+    predictions = model.predict(image_array)
+```
+
+<Warning>
+**Important:** The preprocessing steps must exactly match those used during training. Mismatched preprocessing (e.g., different normalization) will result in poor model performance.
+</Warning>
+
+## Model Input/Output
+
+### Input Shape
+
+```python
+Input shape: (batch_size, 224, 224, 3)
+```
+
+- **batch_size:** Number of images (typically 1 for single predictions)
+- **224 × 224:** Image dimensions (height × width)
+- **3:** Color channels (RGB)
+
+**Data type:** `float32`  
+**Value range:** [0.0, 1.0] (normalized pixel values)
+
+### Output Shape
+
+```python
+Output shape: (batch_size, 5)
+```
+
+- **batch_size:** Number of predictions (matches input)
+- **5:** Probability scores for each class
+
+**Data type:** `float32`  
+**Value range:** [0.0, 1.0] (softmax probabilities that sum to 1.0)
+
+### Example Input/Output
+
+<CodeGroup>
+```python Input Example
+import numpy as np
+
+# Single image preprocessed for inference
+input_tensor = np.random.rand(1, 224, 224, 3).astype('float32')
+
+print(input_tensor.shape)  # (1, 224, 224, 3)
+print(input_tensor.min())  # ~0.0
+print(input_tensor.max())  # ~1.0
+```
+
+```python Output Example
+# Model prediction output
+predictions = model.predict(input_tensor)
+
+print(predictions.shape)  # (1, 5)
+print(predictions)
+# [[0.05, 0.82, 0.03, 0.08, 0.02]]
+#    ^    ^     ^     ^     ^
+#    |    |     |     |     └─ Others: 2%
+#    |    |     |     └─ Healthy: 8%
+#    |    |     └─ Fruitly: 3%
+#    |    └─ Bacterial-Black-spot: 82% ← Highest
+#    └─ Anthracnose: 5%
+
+print(predictions.sum())  # 1.0 (probabilities sum to 1)
+```
+</CodeGroup>
+
+## Inference Process
+
+The complete inference pipeline from image to prediction:
+
+```python
+# From fastapi_app/api.py
+from fastapi.responses import JSONResponse
+import numpy as np
+
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
+    try:
+        # 1. Read and preprocess image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        image = image.resize((224, 224))
+        image_array = np.array(image) / 255.0
+        image_array = np.expand_dims(image_array, axis=0)
+        
+        # 2. Run model inference
+        predictions = model.predict(image_array)
+        # Shape: (1, 5) - probabilities for each class
+        
+        # 3. Get the predicted class index with highest score
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        
+        # 4. Map index to class name
+        predicted_class_name = class_names[predicted_class_index]
+        
+        # 5. Return JSON response
+        return JSONResponse(content={"prediction": predicted_class_name})
+    
+    except Exception as e:
+        return JSONResponse(
+            status_code=500, 
+            content={"detail": str(e)}
+        )
+```
+
+### Performance Characteristics
+
+<CardGroup cols={2}>
+  <Card title="Inference Speed" icon="gauge">
+    Typically 50-200ms per image on CPU (faster on GPU)
+  </Card>
+  <Card title="Model Size" icon="hard-drive">
+    ~80-100 MB for VGG19-based model (download from [bit.ly/pyconmodelh5](https://bit.ly/pyconmodelh5))
+  </Card>
+  <Card title="Memory Usage" icon="memory">
+    ~500MB-1GB RAM for model and inference
+  </Card>
+  <Card title="Batch Processing" icon="layer-group">
+    Can process multiple images by increasing batch dimension
+  </Card>
+</CardGroup>
+
+## Model File
+
+### Location and Format
+
+The trained model is stored as an HDF5 file:
+
+```
+fastapi_app/
+└── model/
+    └── mango_model.h5  # TensorFlow/Keras model file
+```
+
+<Note>
+The model file (`mango_model.h5`) is not included in the repository due to its size. Download it from [bit.ly/pyconmodelh5](https://bit.ly/pyconmodelh5) and place it in `fastapi_app/model/` before running the application.
+</Note>
+
+### Model Format Details
+
+```python
+import tensorflow as tf
+
+# Load model
+model = tf.keras.models.load_model('model/mango_model.h5')
+
+# Inspect model
+print(model.summary())  # Display architecture
+print(model.input_shape)  # (None, 224, 224, 3)
+print(model.output_shape)  # (None, 5)
+```
+
+The `.h5` format contains:
+- Model architecture (layer configuration)
+- Trained weights and biases
+- Optimizer state (if saved)
+- Training configuration
+
+## Training Details
+
+For information about how the model was trained, refer to the training notebook:
+
+<Card 
+  title="VGG19 Training Notebook" 
+  icon="python" 
+  href="https://bit.ly/vgg19-model"
+>
+  View the Google Colab notebook containing:
+  - Dataset preparation and augmentation
+  - Transfer learning configuration
+  - Training hyperparameters
+  - Evaluation metrics and performance
+  - Model export process
+</Card>
+
+### Typical Training Configuration
+
+While exact parameters are in the notebook, typical configurations include:
+
+```python
+# Pseudo-code representation of training approach
+
+# 1. Load pre-trained VGG19 (ImageNet weights)
+base_model = VGG19(weights='imagenet', include_top=False)
+
+# 2. Freeze base layers (transfer learning)
+for layer in base_model.layers:
+    layer.trainable = False
+
+# 3. Add custom classification head
+model = Sequential([
+    base_model,
+    GlobalAveragePooling2D(),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(5, activation='softmax')  # 5 classes
+])
+
+# 4. Compile with appropriate loss and optimizer
+model.compile(
+    optimizer='adam',
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# 5. Train on mango damage dataset
+model.fit(train_data, epochs=20, validation_data=val_data)
+```
+
+<Tip>
+Transfer learning allows the model to leverage VGG19's pre-trained feature extraction capabilities, reducing training time and improving performance with limited mango-specific data.
+</Tip>
+
+## Optimization Considerations
+
+### Inference Optimization
+
+For production deployments, consider these optimizations:
+
+<Accordion title="Model Quantization">
+Reduce model size and improve inference speed:
+
+```python
+import tensorflow as tf
+
+# Convert to TensorFlow Lite with quantization
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+tflite_model = converter.convert()
+
+# Save quantized model
+with open('mango_model.tflite', 'wb') as f:
+    f.write(tflite_model)
+```
+
+Benefits:
+- 4x smaller model size
+- Faster inference on CPU
+- Lower memory footprint
+</Accordion>
+
+<Accordion title="Batch Processing">
+Process multiple images in a single batch:
+
+```python
+# Prepare multiple images
+images = [preprocess(img) for img in image_list]
+batch = np.array(images)  # Shape: (N, 224, 224, 3)
+
+# Single batched inference
+predictions = model.predict(batch)  # Shape: (N, 5)
+
+# Extract predictions
+for i, pred in enumerate(predictions):
+    class_idx = np.argmax(pred)
+    print(f"Image {i}: {class_names[class_idx]}")
+```
+
+Benefits:
+- Better GPU utilization
+- Higher throughput for bulk processing
+</Accordion>
+
+<Accordion title="GPU Acceleration">
+Enable GPU inference for faster predictions:
+
+```python
+import tensorflow as tf
+
+# Check GPU availability
+print("GPUs Available:", tf.config.list_physical_devices('GPU'))
+
+# Optionally configure GPU memory growth
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+```
+
+Benefits:
+- 10-50x faster inference than CPU
+- Enable real-time processing
+- Support higher concurrent request loads
+</Accordion>
+
+<Accordion title="Model Caching">
+Optimize for repeated inference:
+
+```python
+# Warm up the model with a dummy prediction
+dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
+_ = model.predict(dummy_input)
+
+# Subsequent predictions will be faster
+```
+
+Benefits:
+- Eliminate first-request latency
+- More consistent response times
+</Accordion>
+
+## API Integration
+
+The model is exposed via a FastAPI endpoint for easy integration:
+
+### Making Predictions
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8001/predict/" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@mango.jpg"
+```
+
+```python Python
+import requests
+
+url = "http://localhost:8001/predict/"
+files = {'file': open('mango.jpg', 'rb')}
+
+response = requests.post(url, files=files)
+result = response.json()
+
+print(f"Prediction: {result['prediction']}")
+# Output: Prediction: Anthracnose
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+fetch('http://localhost:8001/predict/', {
+  method: 'POST',
+  body: formData
+})
+.then(response => response.json())
+.then(data => {
+  console.log('Prediction:', data.prediction);
+});
+```
+</CodeGroup>
+
+## Model Limitations
+
+<Warning>
+**Current Limitations:**
+
+1. **Single-label output:** Only returns the top prediction (no probability scores exposed)
+2. **Fixed input size:** Requires 224×224 input (images are resized, potentially losing detail)
+3. **RGB only:** Grayscale images need conversion to RGB
+4. **No multi-damage detection:** Cannot detect multiple damage types on one mango
+5. **Training data dependency:** Performance varies with similarity to training images
+</Warning>
+
+## Future Improvements
+
+Potential enhancements for the model system:
+
+<CardGroup cols={2}>
+  <Card title="Confidence Scores" icon="percent">
+    Return probability distributions for all classes
+  </Card>
+  <Card title="Multi-label Classification" icon="tags">
+    Detect multiple damage types simultaneously
+  </Card>
+  <Card title="Object Detection" icon="crosshairs">
+    Localize damage regions with bounding boxes or segmentation
+  </Card>
+  <Card title="Model Versioning" icon="code-branch">
+    Support A/B testing and gradual rollouts of improved models
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+<CardGroup cols={3}>
+  <Card title="Training Notebook" icon="python" href="https://bit.ly/vgg19-model">
+    View model training in Colab
+  </Card>
+  <Card title="Download Model" icon="download" href="https://bit.ly/pyconmodelh5">
+    Get pre-trained weights
+  </Card>
+  <Card title="Presentation" icon="presentation" href="https://speakerdeck.com/kambale/serving-machine-learning-models-in-django-with-fastapi">
+    Learn about the architecture
+  </Card>
+</CardGroup>

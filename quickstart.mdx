@@ -1,80 +1,232 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'Get started with Mango Damage Detection in under 5 minutes'
 ---
 
-## Get started in three steps
+Get your mango damage detection system up and running quickly with Docker. This guide will walk you through deploying both the Django web interface and FastAPI prediction service.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- [Docker](https://www.docker.com/get-started) installed and running
+- [Git](https://git-scm.com/) for cloning the repository
+- At least 2GB of free disk space for the model and containers
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This quickstart uses Docker Compose to run both the Django web interface (port 8000) and FastAPI prediction service (port 8001) in separate containers.
 </Note>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Mango Damage Detection repository to your local machine:
+
+    ```bash
+    git clone https://github.com/your-username/mango_app.git
+    cd mango_app
+    ```
+  </Step>
+
+  <Step title="Download the pre-trained model">
+    Download the TensorFlow model and place it in the correct directory:
+
+    ```bash
+    # Create the model directory if it doesn't exist
+    mkdir -p fastapi_app/model
+
+    # Download the model (alternatively, download manually from https://bit.ly/pyconmodelh5)
+    curl -L https://bit.ly/pyconmodelh5 -o fastapi_app/model/mango_model.h5
+    ```
+
+    <Warning>
+    The model file (`mango_model.h5`) must be placed in `fastapi_app/model/` before building. The FastAPI service will fail to start without it.
+    </Warning>
+  </Step>
+
+  <Step title="Build the Docker containers">
+    Build both the Django and FastAPI images:
+
+    ```bash
+    docker compose build
+    ```
+
+    This creates two images:
+    - `mango_app`: Django web interface
+    - `mango_fastapi`: FastAPI prediction service
+  </Step>
+
+  <Step title="Start the services">
+    Launch both containers:
+
+    ```bash
+    docker compose up
+    ```
+
+    <Tip>
+    Add the `-d` flag to run in detached mode: `docker compose up -d`
+    </Tip>
+
+    Wait for both services to start. You should see output indicating:
+    - Django running on `0.0.0.0:8000`
+    - FastAPI (Uvicorn) running on `0.0.0.0:8001`
+  </Step>
+</Steps>
+
+## Verify Installation
+
+Once the containers are running, verify both services are accessible:
+
+<CardGroup cols={2}>
+  <Card title="Web Interface" icon="browser" href="http://localhost:8000">
+    Django web interface for uploading images
+  </Card>
+  <Card title="API Docs" icon="code" href="http://localhost:8001/docs">
+    FastAPI interactive API documentation
+  </Card>
+</CardGroup>
+
+## Make Your First Prediction
+
+### Using the Web Interface
+
+1. Open your browser and navigate to `http://localhost:8000`
+2. Click the file upload button and select a mango image
+3. Click "Submit" to analyze the image
+4. View the prediction result showing the damage type
+
+<Note>
+The model classifies mangoes into five categories: Anthracnose, Bacterial-Black-spot, Fruitly, Healthy-mango, and Others.
+</Note>
+
+For detailed guidance on using the web interface, see the [Web Interface Guide](/guides/web-interface).
+
+### Using the API
+
+You can also make predictions directly via the FastAPI endpoint:
+
+<CodeGroup>
+```bash curl
+curl -X POST "http://localhost:8001/predict/" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/your/mango_image.jpg"
+```
+
+```python Python
+import requests
+
+url = "http://localhost:8001/predict/"
+files = {"file": open("mango_image.jpg", "rb")}
+
+response = requests.post(url, files=files)
+print(response.json())
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+fetch('http://localhost:8001/predict/', {
+  method: 'POST',
+  body: formData
+})
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('Error:', error));
+```
+</CodeGroup>
+
+**Example Response:**
+
+```json
+{
+  "prediction": "Healthy-mango"
+}
+```
+
+The API returns one of five damage classifications:
+- `Anthracnose` - Fungal disease causing dark lesions
+- `Bacterial-Black-spot` - Bacterial infection with black spots
+- `Fruitly` - Fruit fly damage
+- `Healthy-mango` - No visible damage
+- `Others` - Other types of damage
+
+## Understanding the Architecture
+
+The application runs two separate services that communicate over a Docker network:
+
+- **Django (port 8000)**: Handles the web interface and user file uploads
+- **FastAPI (port 8001)**: Serves the TensorFlow model and processes predictions
+
+When you upload an image through the web interface, Django forwards it to FastAPI's `/predict/` endpoint, which processes it through the model and returns the classification.
+
+<Tip>
+The services communicate via the `mango_network` Docker network. Django uses `http://fastapi:8001` internally to call the FastAPI service.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="webhook" href="/api/predict">
+    Learn about the prediction API endpoints and parameters
+  </Card>
+  <Card title="Model Details" icon="brain" href="/concepts/model">
+    Understand how the TensorFlow model works
+  </Card>
+  <Card title="Deployment Guide" icon="rocket" href="/deployment/docker">
+    Deploy to production environments
+  </Card>
+  <Card title="Web Interface" icon="desktop" href="/guides/web-interface">
+    Explore all web interface features
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If ports 8000 or 8001 are already in use, modify the port mappings in `docker-compose.yml`:
+
+    ```yaml
+    ports:
+      - "8002:8000"  # Change host port to 8002
+    ```
+  </Accordion>
+
+  <Accordion title="Model file not found">
+    Ensure the model file is at `fastapi_app/model/mango_model.h5`. Check the file exists:
+
+    ```bash
+    ls -lh fastapi_app/model/mango_model.h5
+    ```
+
+    If missing, re-download from [https://bit.ly/pyconmodelh5](https://bit.ly/pyconmodelh5)
+  </Accordion>
+
+  <Accordion title="Connection refused between services">
+    If Django cannot connect to FastAPI, ensure both containers are on the same network:
+
+    ```bash
+    docker network inspect mango_network
+    ```
+
+    Both `mango_app` and `mango_fastapi` containers should be listed.
+  </Accordion>
+</AccordionGroup>
+
+## Stopping the Services
+
+To stop the running containers:
+
+```bash
+# Stop containers but keep them
+docker compose stop
+
+# Stop and remove containers
+docker compose down
+
+# Stop, remove containers, and clean up volumes
+docker compose down -v
+```

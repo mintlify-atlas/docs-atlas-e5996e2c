@@ -1,0 +1,186 @@
+---
+title: 'Response Format'
+description: 'Understanding the prediction API response structure'
+---
+
+## Response Types
+
+The `/predict/` endpoint returns two types of responses depending on whether the prediction was successful or encountered an error.
+
+## Successful Response
+
+When the image is successfully processed and classified, the API returns a JSON object with the prediction.
+
+**Status Code**: `200 OK`
+
+**Content-Type**: `application/json`
+
+### Response Fields
+
+<ResponseField name="prediction" type="string" required>
+  The predicted mango condition class. This is one of five possible values representing different types of damage or health status.
+</ResponseField>
+
+### Possible Prediction Values
+
+The `prediction` field will contain one of the following five class names:
+
+<Expandable title="Anthracnose">
+  A fungal disease that causes dark, sunken lesions on the mango fruit. This is one of the most common post-harvest diseases affecting mangoes.
+  
+  **Example Response**:
+  ```json
+  {
+    "prediction": "Anthracnose"
+  }
+  ```
+</Expandable>
+
+<Expandable title="Bacterial-Black-spot">
+  A bacterial infection characterized by small, dark spots on the mango surface. This disease can significantly reduce fruit quality.
+  
+  **Example Response**:
+  ```json
+  {
+    "prediction": "Bacterial-Black-spot"
+  }
+  ```
+</Expandable>
+
+<Expandable title="Fruitly">
+  Damage caused by fruit flies, which lay eggs in the fruit. This leads to internal decay and makes the fruit unmarketable.
+  
+  **Example Response**:
+  ```json
+  {
+    "prediction": "Fruitly"
+  }
+  ```
+</Expandable>
+
+<Expandable title="Healthy-mango">
+  The mango shows no visible signs of damage or disease. The fruit is in good condition.
+  
+  **Example Response**:
+  ```json
+  {
+    "prediction": "Healthy-mango"
+  }
+  ```
+</Expandable>
+
+<Expandable title="Others">
+  Damage or conditions that don't fit into the specific categories above. This could include mechanical damage, other diseases, or unclear conditions.
+  
+  **Example Response**:
+  ```json
+  {
+    "prediction": "Others"
+  }
+  ```
+</Expandable>
+
+## Error Response
+
+When an error occurs during image processing or prediction, the API returns an error response.
+
+**Status Code**: `500 Internal Server Error`
+
+**Content-Type**: `application/json`
+
+### Response Fields
+
+<ResponseField name="detail" type="string" required>
+  A descriptive error message explaining what went wrong during the prediction process.
+</ResponseField>
+
+### Error Example
+
+```json
+{
+  "detail": "cannot identify image file <_io.BytesIO object at 0x7f8b8c0d0>"
+}
+```
+
+### Common Error Messages
+
+| Error Message | Cause | Solution |
+|--------------|-------|----------|
+| `cannot identify image file` | Invalid or corrupted image format | Ensure the file is a valid image (JPG, PNG, etc.) |
+| `model.predict() failed` | Model inference error | Check that the image has valid dimensions and color channels |
+| `'NoneType' object has no attribute` | Missing required parameter | Ensure the 'file' parameter is included in the request |
+
+## Interpreting Predictions
+
+### How Predictions Work
+
+The TensorFlow model analyzes the uploaded image and outputs probability scores for each of the five classes. The API implementation follows this process:
+
+```python
+# Get predictions for all classes
+predictions = model.predict(image_array)
+
+# Select the class with highest probability
+predicted_class_index = np.argmax(predictions, axis=1)[0]
+
+# Map index to class name
+predicted_class_name = class_names[predicted_class_index]
+```
+
+### Confidence Levels
+
+The current API returns only the predicted class name. The model internally generates confidence scores, but these are not included in the response. The returned prediction is always the class with the highest probability.
+
+### Use Cases
+
+**Quality Control**: Sort mangoes based on health status at packing facilities
+
+**Loss Prevention**: Identify diseased fruits early to prevent spread
+
+**Market Grading**: Classify mangoes for different market tiers based on condition
+
+**Research**: Collect data on disease prevalence and patterns
+
+## Integration Example
+
+Here's a complete example showing how to handle both response types:
+
+```python
+import requests
+import json
+
+def classify_mango(image_path):
+    url = "http://localhost:8001/predict/"
+    
+    try:
+        with open(image_path, "rb") as image_file:
+            files = {"file": image_file}
+            response = requests.post(url, files=files)
+        
+        if response.status_code == 200:
+            result = response.json()
+            prediction = result["prediction"]
+            
+            # Handle different predictions
+            if prediction == "Healthy-mango":
+                print("Good to sell!")
+            elif prediction in ["Anthracnose", "Bacterial-Black-spot"]:
+                print(f"Disease detected: {prediction}")
+            elif prediction == "Fruitly":
+                print("Fruit fly damage detected")
+            else:
+                print(f"Other condition: {prediction}")
+                
+            return prediction
+        else:
+            error = response.json()
+            print(f"Error: {error['detail']}")
+            return None
+            
+    except Exception as e:
+        print(f"Request failed: {str(e)}")
+        return None
+
+# Use the function
+result = classify_mango("mango_sample.jpg")
+```
