@@ -13,7 +13,7 @@ This page provides practical examples for interacting with the Mango Damage Dete
 The model can detect the following mango conditions:
 - **Anthracnose**: Fungal disease causing dark lesions
 - **Bacterial-Black-spot**: Bacterial infection with black spots
-- **Fruitfly**: Damage from fruit fly infestation
+- **Fruitly**: Damage from fruit fly infestation
 - **Healthy-mango**: No visible damage
 - **Others**: Unclassified damage or conditions
 
@@ -41,9 +41,9 @@ curl -X POST "http://localhost:8001/predict/" \
   -H "Content-Type: multipart/form-data"
 ```
 
-```bash Fruitfly Damage
+```bash Fruitly (Fruit Fly Damage)
 curl -X POST "http://localhost:8001/predict/" \
-  -F "file=@fruitfly_damage.jpg" \
+  -F "file=@fruitly_damage.jpg" \
   -H "Content-Type: multipart/form-data"
 ```
 
@@ -376,7 +376,7 @@ def classify_severity(prediction):
     severity_map = {
         'Healthy-mango': 'none',
         'Others': 'low',
-        'Fruitfly': 'medium',
+        'Fruitly': 'medium',
         'Bacterial-Black-spot': 'high',
         'Anthracnose': 'high'
     }
@@ -387,7 +387,7 @@ def get_recommendations(prediction):
     recommendations = {
         'Anthracnose': 'Apply fungicide treatment and improve ventilation',
         'Bacterial-Black-spot': 'Remove infected fruits and apply copper-based bactericide',
-        'Fruitfly': 'Use fruit fly traps and maintain orchard hygiene',
+        'Fruitly': 'Use fruit fly traps and maintain orchard hygiene',
         'Healthy-mango': 'Continue regular monitoring and maintenance',
         'Others': 'Consult with agricultural expert for proper diagnosis'
     }
