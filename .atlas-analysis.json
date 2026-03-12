@@ -1,0 +1,82 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Mango Damage Detection",
+  "projectDescription": "A web application that detects damage on mangoes using a TensorFlow model with Django frontend and FastAPI model serving.",
+  "theme": "palm",
+  "primaryColor": "#ee6423",
+  "lightColor": "#eeb47c",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/damage-types",
+              "concepts/model"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/local"
+            ]
+          },
+          {
+            "group": "Usage Guide",
+            "pages": [
+              "guides/web-interface",
+              "guides/api-usage"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/predict",
+              "api/response-format"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "api/django-integration",
+              "api/examples"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multilabel classification for 5 types of mango damage",
+    "FastAPI-based model inference API",
+    "Django web interface for image uploads",
+    "Pre-trained VGG19-based TensorFlow model",
+    "Docker containerized deployment with docker-compose",
+    "Real-time image prediction with confidence scores"
+  ],
+  "publicApiSurface": [
+    "POST /predict/ - Image prediction endpoint",
+    "mango_model.h5 - Pre-trained TensorFlow model",
+    "Class labels: Anthracnose, Bacterial-Black-spot, Fruitfly, Healthy-mango, Others",
+    "Image preprocessing: 224x224 resize, normalization",
+    "Django view: index() - Main upload interface",
+    "FastAPI app: predict() - Model inference handler"
+  ]
+}
